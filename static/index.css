@@ -1,0 +1,338 @@
+/* 记账本插件样式 —— 尽量贴合思源主题色，使用 CSS 变量 */
+:root {
+  --ledger-income: #67c23a;
+  --ledger-expense: #f56c6c;
+}
+
+.ledger-dock {
+  padding: 8px;
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* 录入表单 */
+.ledger-quick-entry .ledger-type-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.ledger-type-tab {
+  flex: 1;
+  padding: 6px 0;
+  border: none;
+  border-radius: 4px;
+  background: var(--b3-theme-background-light);
+  color: var(--b3-theme-on-surface);
+  cursor: pointer;
+}
+.ledger-type-tab.active {
+  background: var(--b3-theme-primary);
+  color: var(--b3-theme-on-primary);
+}
+.ledger-field {
+  margin-bottom: 8px;
+}
+.ledger-amount {
+  width: 100%;
+  font-size: 20px;
+  font-weight: 600;
+  padding: 8px;
+  box-sizing: border-box;
+  border: 1px solid var(--b3-theme-on-surface-light);
+  border-radius: 4px;
+  background: var(--b3-theme-background);
+  color: var(--b3-theme-on-background);
+}
+.ledger-field input,
+.ledger-field select {
+  width: 100%;
+  padding: 6px;
+  box-sizing: border-box;
+  border: 1px solid var(--b3-theme-on-surface-light);
+  border-radius: 4px;
+  background: var(--b3-theme-background);
+  color: var(--b3-theme-on-background);
+}
+
+/* 分类网格 */
+.ledger-categories {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.ledger-cat-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 2px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: var(--b3-theme-background-light);
+  cursor: pointer;
+  font-size: 11px;
+}
+.ledger-cat-btn.active {
+  border-color: var(--b3-theme-primary);
+}
+.ledger-cat-icon {
+  font-size: 18px;
+}
+
+.ledger-save-btn {
+  width: 100%;
+  padding: 8px;
+  border: none;
+  border-radius: 4px;
+  background: var(--b3-theme-primary);
+  color: var(--b3-theme-on-primary);
+  font-size: 14px;
+  cursor: pointer;
+}
+.ledger-save-btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+/* 汇总区 */
+.ledger-dock-summary {
+  border-top: 1px solid var(--b3-theme-on-surface-light);
+  padding-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ledger-summary-row {
+  display: flex;
+  justify-content: space-between;
+}
+.ledger-summary-row b {
+  font-variant-numeric: tabular-nums;
+}
+.ledger-expense {
+  color: var(--ledger-expense);
+}
+.ledger-income {
+  color: var(--ledger-income);
+}
+
+/* 最近列表 */
+.ledger-dock-recent {
+  border-top: 1px solid var(--b3-theme-on-surface-light);
+  padding-top: 8px;
+}
+.ledger-recent-title {
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: var(--b3-theme-on-surface);
+}
+.ledger-tx-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+}
+.ledger-tx-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ledger-tx-amount {
+  font-variant-numeric: tabular-nums;
+}
+.ledger-tx-amount.expense {
+  color: var(--ledger-expense);
+}
+.ledger-tx-amount.income {
+  color: var(--ledger-income);
+}
+.ledger-empty {
+  color: var(--b3-theme-on-surface-light);
+  text-align: center;
+  padding: 12px 0;
+}
+
+/* 操作按钮 */
+.ledger-tx-actions {
+  display: flex;
+  gap: 2px;
+  flex-shrink: 0;
+}
+.ledger-tx-btn {
+  border: none;
+  background: none;
+  cursor: pointer;
+  padding: 2px 4px;
+  font-size: 13px;
+  border-radius: 3px;
+  opacity: 0.5;
+  transition: opacity 0.15s;
+}
+.ledger-tx-btn:hover {
+  opacity: 1;
+  background: var(--b3-theme-background-light);
+}
+.ledger-tx-info {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.ledger-tx-date {
+  font-size: 11px;
+  color: var(--b3-theme-on-surface-light);
+}
+
+/* 按钮行 */
+.ledger-btn-row {
+  display: flex;
+  gap: 6px;
+}
+.ledger-cancel-btn {
+  flex: 1;
+  padding: 8px;
+  border: 1px solid var(--b3-theme-on-surface-light);
+  border-radius: 4px;
+  background: var(--b3-theme-background);
+  color: var(--b3-theme-on-background);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+/* 记账对话框 */
+.ledger-dialog-body {
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.ledger-dialog-summary {
+  border-top: 1px solid var(--b3-theme-on-surface-light);
+  padding-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.ledger-dialog-list {
+  border-top: 1px solid var(--b3-theme-on-surface-light);
+  padding-top: 10px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+/* 对话框顶层标签栏 */
+.ledger-dialog-tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--b3-theme-on-surface-light);
+  padding-bottom: 8px;
+}
+.ledger-dialog-tab {
+  flex: 1;
+  padding: 8px 0;
+  border: none;
+  border-radius: 4px 4px 0 0;
+  background: var(--b3-theme-background-light);
+  color: var(--b3-theme-on-surface);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+}
+.ledger-dialog-tab.active {
+  background: var(--b3-theme-primary);
+  color: var(--b3-theme-on-primary);
+}
+
+/* 统计页 */
+.ledger-stats-section {
+  margin-bottom: 16px;
+}
+.ledger-stats-title {
+  font-weight: 600;
+  font-size: 14px;
+  margin-bottom: 10px;
+  color: var(--b3-theme-on-surface);
+}
+
+/* 环形图 */
+.ledger-donut-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.ledger-donut {
+  width: 160px;
+  height: 160px;
+}
+.ledger-donut-label {
+  font-size: 16px;
+  font-weight: 700;
+  fill: var(--b3-theme-on-surface);
+}
+.ledger-donut-sublabel {
+  font-size: 10px;
+  fill: var(--b3-theme-on-surface-light);
+}
+
+/* 图例 */
+.ledger-legend {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.ledger-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+}
+.ledger-legend-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.ledger-legend-name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ledger-legend-val {
+  color: var(--b3-theme-on-surface-light);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+/* 柱状图 */
+.ledger-bar-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.ledger-bar-chart {
+  width: 100%;
+  max-height: 160px;
+}
+.ledger-bar-label {
+  font-size: 8px;
+  fill: var(--b3-theme-on-surface-light);
+}
+.ledger-bar-legend {
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--b3-theme-on-surface);
+}

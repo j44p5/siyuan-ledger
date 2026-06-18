@@ -1,0 +1,22 @@
+{
+  "name": "siyuan-ledger",
+  "author": "howke",
+  "url": "https://github.com/howke/siyuan-ledger",
+  "version": "0.1.0",
+  "minAppVersion": "2.9.0",
+  "backends": ["all"],
+  "frontends": ["all"],
+  "displayName": {
+    "default": "Ledger",
+    "zh_CN": "记账本"
+  },
+  "description": {
+    "default": "A lightweight local-first bookkeeping plugin for SiYuan.",
+    "zh_CN": "本地优先的轻量记账插件，账单随笔记同步。"
+  },
+  "readme": {
+    "default": "README.md"
+  },
+  "icon": "icon.png",
+  "preview": "preview.png"
+}
