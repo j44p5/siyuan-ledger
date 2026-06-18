@@ -1,11 +1,12 @@
 {
   "name": "siyuan-ledger",
   "author": "howke",
-  "url": "https://github.com/howke/siyuan-ledger",
-  "version": "0.1.0",
+  "url": "https://github.com/j44p5/siyuan-ledger",
+  "version": "0.2.0",
   "minAppVersion": "2.9.0",
   "backends": ["all"],
   "frontends": ["all"],
+  "disabledInPublish": false,
   "displayName": {
     "default": "Ledger",
     "zh_CN": "记账本"
@@ -17,6 +18,11 @@
   "readme": {
     "default": "README.md"
   },
-  "icon": "icon.png",
-  "preview": "preview.png"
+  "funding": {
+    "openCollective": "",
+    "patreon": "",
+    "github": "",
+    "custom": []
+  },
+  "keywords": ["记账", "bookkeeping", "ledger", "expense", "finance"]
 }
