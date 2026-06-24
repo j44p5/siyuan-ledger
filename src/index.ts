@@ -3,12 +3,33 @@
 import {Plugin, Dialog, showMessage, openTab, type Protyle} from "siyuan";
 import {createStore, type LedgerStore} from "./core/store";
 import {DockPanel} from "./ui/DockPanel";
-import {formatAmount, summarize, inMonth, byCategory} from "./core/stats";
+import {formatAmount, summarize, inMonth, byCategory, inDateRange, inAmountRange} from "./core/stats";
 import {smartParse, formatEntrySummary} from "./core/slash-parser";
-import type {LedgerData, TxType} from "./core/types";
+import type {LedgerData, TxType, Transaction} from "./core/types";
 
 const DOCK_TYPE = "ledger-dock";
 const TOPBAR_ICON = "iconAccount";
+
+const FINANCE_QUOTES = [
+  "省钱就是赚钱",
+  "量入为出，细水长流",
+  "复利是世界第八大奇迹",
+  "不要把所有鸡蛋放在一个篮子里",
+  "今日省下的一分钱，就是明日的一分利",
+  "财富不在于赚多少，而在于留多少",
+  "花钱容易，攒钱难，理财更难",
+  "投资自己，是最好的理财",
+  "记账是财务自由的第一步",
+  "每一笔支出，都是一次选择",
+  "不为明天忧虑，但要为明天准备",
+  "小钱不攒，大钱不来",
+  "会花钱的人，才会赚钱",
+  "节俭不是不花钱，而是花得值",
+  "财务自由不是有钱，而是有选择",
+];
+function randomQuote(): string {
+  return FINANCE_QUOTES[Math.floor(Math.random() * FINANCE_QUOTES.length)];
+}
 
 export default class LedgerPlugin extends Plugin {
   private store!: LedgerStore;
@@ -32,7 +53,7 @@ export default class LedgerPlugin extends Plugin {
       data: {},
       type: DOCK_TYPE,
       init(dockModel) {
-        self.dockPanel = new DockPanel(store, this.element, i18n);
+        self.dockPanel = new DockPanel(store, this.element, i18n, self.app);
         self.dockPanel.init().catch((e) => {
           console.error("[ledger] dock init failed", e);
         });
@@ -123,8 +144,8 @@ export default class LedgerPlugin extends Plugin {
         return;
       }
 
-      // 创建交易记录
-      await store.addTransaction({
+      // 创建交易记录（先暂存 blockId，insert 后修正为摘要实际所在的块）
+      const tx = await store.addTransaction({
         type: result.type,
         amount: result.amount,
         currency: "CNY",
@@ -147,6 +168,26 @@ export default class LedgerPlugin extends Plugin {
       // 在当前块插入格式化摘要
       const summary = formatEntrySummary(result);
       protyle.insert(summary);
+
+      // insert 完成后，捕获摘要实际所在块的 ID 并更新交易记录
+      // （protyle.insert 会在当前块下方创建新块，原始 blockId 指向的是父/前驱块）
+      await new Promise<void>((resolve) => {
+        setTimeout(() => {
+          try {
+            const range = getSelection()?.getRangeAt(0);
+            if (range) {
+              const newBlockEl = range.startContainer.parentElement?.closest("[data-node-id]");
+              const newBlockId = newBlockEl?.getAttribute("data-node-id");
+              if (newBlockId && newBlockId !== blockId) {
+                void store.updateTransaction(tx.id, {blockId: newBlockId});
+              }
+            }
+          } catch {
+            // 忽略：如果获取失败，保留原始 blockId
+          }
+          resolve();
+        }, 150);
+      });
 
       showMessage(i18n.saveSuccess ?? "已记录 ✓");
       dialog.destroy();
@@ -172,14 +213,17 @@ export default class LedgerPlugin extends Plugin {
     const summaryHtml = this.buildSummaryHtml(data);
     const listHtml = this.buildListHtml(data);
     const statsHtml = this.buildStatsHtml(data);
+    const searchHtml = this.buildSearchHtml(data);
 
     const dialog = new Dialog({
       title: i18n.dockTitle ?? "记账本",
       content: `<div class="ledger-dialog-body">
+        <div class="ledger-dialog-quote-bar">💡 ${randomQuote()}</div>
         <div class="ledger-dialog-tabs">
           <button class="ledger-dialog-tab active" data-tab="expense">${i18n.expense ?? "支出"}</button>
           <button class="ledger-dialog-tab" data-tab="income">${i18n.income ?? "收入"}</button>
           <button class="ledger-dialog-tab" data-tab="stats">${i18n.tabStats ?? "统计"}</button>
+          <button class="ledger-dialog-tab" data-tab="search">${i18n.tabSearch ?? "查询"}</button>
         </div>
         <div class="ledger-tab-page ledger-tab-entry">
           ${entryHtml}
@@ -189,8 +233,11 @@ export default class LedgerPlugin extends Plugin {
         <div class="ledger-tab-page ledger-tab-stats" style="display:none">
           ${statsHtml}
         </div>
+        <div class="ledger-tab-page ledger-tab-search" style="display:none">
+          ${searchHtml}
+        </div>
       </div>`,
-      width: "420px",
+      width: "500px",
     });
 
     // 当前编辑状态
@@ -218,7 +265,7 @@ export default class LedgerPlugin extends Plugin {
     body.addEventListener("click", (e) => {
       const target = e.target as HTMLElement;
 
-      // 顶层标签切换（支出 / 收入 / 统计）
+      // 顶层标签切换（支出 / 收入 / 统计 / 查询）
       const dialogTab = target.closest(".ledger-dialog-tab") as HTMLElement | null;
       if (dialogTab) {
         const tab = dialogTab.dataset.tab;
@@ -227,9 +274,11 @@ export default class LedgerPlugin extends Plugin {
         );
         const entryPage = body.querySelector(".ledger-tab-entry") as HTMLElement | null;
         const statsPage = body.querySelector(".ledger-tab-stats") as HTMLElement | null;
+        const searchPage = body.querySelector(".ledger-tab-search") as HTMLElement | null;
 
         if (tab === "stats") {
           if (entryPage) entryPage.style.display = "none";
+          if (searchPage) searchPage.style.display = "none";
           if (statsPage) {
             statsPage.style.display = "";
             void (async () => {
@@ -237,11 +286,16 @@ export default class LedgerPlugin extends Plugin {
               statsPage.innerHTML = this.buildStatsHtml(fresh);
             })();
           }
+        } else if (tab === "search") {
+          if (entryPage) entryPage.style.display = "none";
+          if (statsPage) statsPage.style.display = "none";
+          if (searchPage) searchPage.style.display = "";
         } else {
           // 支出 or 收入
           currentType = (tab as TxType) ?? "expense";
           if (entryPage) entryPage.style.display = "";
           if (statsPage) statsPage.style.display = "none";
+          if (searchPage) searchPage.style.display = "none";
           const catBox = body.querySelector(".ledger-categories") as HTMLElement | null;
           void (async () => {
             const fresh = await store.load();
@@ -340,8 +394,10 @@ export default class LedgerPlugin extends Plugin {
           );
           const entryPage = body.querySelector(".ledger-tab-entry") as HTMLElement | null;
           const statsPage = body.querySelector(".ledger-tab-stats") as HTMLElement | null;
+          const searchPage = body.querySelector(".ledger-tab-search") as HTMLElement | null;
           if (entryPage) entryPage.style.display = "";
           if (statsPage) statsPage.style.display = "none";
+          if (searchPage) searchPage.style.display = "none";
           const catBox = body.querySelector(".ledger-categories") as HTMLElement;
           catBox.innerHTML = this.buildCategoriesHtml(fresh, tx.type);
           body.querySelectorAll(".ledger-cat-btn").forEach((b) =>
@@ -356,6 +412,52 @@ export default class LedgerPlugin extends Plugin {
           body.querySelector(".ledger-quick-entry")?.scrollIntoView({behavior: "smooth"});
         })();
         return;
+      }
+
+      // 查询按钮
+      if (target.closest("[data-action='search']")) {
+        void (async () => {
+          const fresh = await store.load();
+          const dateFrom = (body.querySelector(".ledger-search-from") as HTMLInputElement)?.value ?? "";
+          const dateTo = (body.querySelector(".ledger-search-to") as HTMLInputElement)?.value ?? "";
+          const typeVal = (body.querySelector(".ledger-search-type") as HTMLSelectElement)?.value ?? "";
+          const catVal = (body.querySelector(".ledger-search-cat") as HTMLSelectElement)?.value ?? "";
+          const minVal = parseFloat((body.querySelector(".ledger-search-min") as HTMLInputElement)?.value ?? "0") || 0;
+          const maxVal = parseFloat((body.querySelector(".ledger-search-max") as HTMLInputElement)?.value ?? "0") || 0;
+          const minCents = Math.round(minVal * 100);
+          const maxCents = Math.round(maxVal * 100);
+
+          let filtered = fresh.transactions.filter((t) => {
+            if (!inDateRange(t, dateFrom, dateTo)) return false;
+            if (typeVal && t.type !== typeVal) return false;
+            if (catVal && t.categoryId !== catVal) return false;
+            if (!inAmountRange(t, minCents, maxCents)) return false;
+            return true;
+          });
+
+          filtered.sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt);
+
+          const resultBox = body.querySelector(".ledger-search-results") as HTMLElement;
+          if (resultBox) {
+            resultBox.innerHTML = this.buildSearchResultsHtml(filtered, fresh);
+          }
+        })();
+        return;
+      }
+    });
+
+    // 查询页类型切换时更新分类下拉
+    body.addEventListener("change", (e) => {
+      const target = e.target as HTMLElement;
+      if (target.classList.contains("ledger-search-type")) {
+        const typeVal = (target as HTMLSelectElement).value;
+        const catSelect = body.querySelector(".ledger-search-cat") as HTMLSelectElement;
+        if (catSelect) {
+          void (async () => {
+            const fresh = await store.load();
+            catSelect.innerHTML = this.buildSearchCategoryOptions(fresh, typeVal);
+          })();
+        }
       }
     });
   }
@@ -386,7 +488,13 @@ export default class LedgerPlugin extends Plugin {
   }
 
   private buildCategoriesHtml(data: LedgerData, type: TxType): string {
-    const cats = data.categories.filter((c) => c.type === type);
+    const cats = data.categories
+      .filter((c) => c.type === type)
+      .sort((a, b) => {
+        const aOther = a.id.startsWith("cat_other") ? 1 : 0;
+        const bOther = b.id.startsWith("cat_other") ? 1 : 0;
+        return aOther - bOther;
+      });
     return cats
       .map(
         (c, i) =>
@@ -414,7 +522,7 @@ export default class LedgerPlugin extends Plugin {
   }
 
   private buildListHtml(data: LedgerData): string {
-    const sorted = [...data.transactions].sort((a, b) => b.createdAt - a.createdAt);
+    const sorted = [...data.transactions].sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt);
     if (!sorted.length) {
       return `<div class="ledger-empty">${this.i18n.empty ?? "暂无记录"}</div>`;
     }
@@ -441,6 +549,92 @@ export default class LedgerPlugin extends Plugin {
         })
         .join("")
     );
+  }
+
+  // ---- 查询页 ----
+
+  private buildSearchHtml(data: LedgerData): string {
+    const today = new Date().toISOString().slice(0, 10);
+    const monthStart = today.slice(0, 8) + "01";
+    const catOptions = this.buildSearchCategoryOptions(data, "");
+    return `<div class="ledger-search-form">
+      <div class="ledger-search-row">
+        <label class="ledger-search-label">${this.i18n.searchDateFrom ?? "起始日期"}</label>
+        <input class="ledger-search-from ledger-field" type="date" value="${monthStart}" />
+        <label class="ledger-search-label">${this.i18n.searchDateTo ?? "结束日期"}</label>
+        <input class="ledger-search-to ledger-field" type="date" value="${today}" />
+      </div>
+      <div class="ledger-search-row">
+        <label class="ledger-search-label">${this.i18n.searchType ?? "类型"}</label>
+        <select class="ledger-search-type ledger-field">
+          <option value="">${this.i18n.searchAllTypes ?? "全部"}</option>
+          <option value="expense">${this.i18n.expense ?? "支出"}</option>
+          <option value="income">${this.i18n.income ?? "收入"}</option>
+        </select>
+        <label class="ledger-search-label">${this.i18n.searchCategory ?? "分类"}</label>
+        <select class="ledger-search-cat ledger-field">
+          <option value="">${this.i18n.searchAllCategories ?? "全部"}</option>
+          ${catOptions}
+        </select>
+      </div>
+      <div class="ledger-search-row">
+        <label class="ledger-search-label">${this.i18n.searchAmountMin ?? "最小金额"}</label>
+        <input class="ledger-search-min ledger-field" type="number" step="0.01" min="0" placeholder="0.00" />
+        <label class="ledger-search-label">${this.i18n.searchAmountMax ?? "最大金额"}</label>
+        <input class="ledger-search-max ledger-field" type="number" step="0.01" min="0" placeholder="0.00" />
+      </div>
+      <button class="ledger-search-btn" data-action="search">${this.i18n.searchBtn ?? "查询"}</button>
+    </div>
+    <div class="ledger-search-results"></div>`;
+  }
+
+  private buildSearchCategoryOptions(data: LedgerData, typeVal: string): string {
+    const cats = typeVal
+      ? data.categories.filter((c) => c.type === typeVal)
+      : data.categories;
+    const allLabel = this.i18n.searchAllCategories ?? "全部分类";
+    return `<option value="">${allLabel}</option>` +
+      cats
+        .map((c) => `<option value="${c.id}">${c.icon} ${c.name}</option>`)
+        .join("");
+  }
+
+  private buildSearchResultsHtml(filtered: Transaction[], data: LedgerData): string {
+    if (!filtered.length) {
+      return `<div class="ledger-empty">${this.i18n.empty ?? "暂无记录"}</div>`;
+    }
+    // 汇总
+    const totalExpense = filtered.filter((t) => t.type === "expense").reduce((s, t) => s + t.amount, 0);
+    const totalIncome = filtered.filter((t) => t.type === "income").reduce((s, t) => s + t.amount, 0);
+    const countLabel = (this.i18n.searchResultCount ?? "共 %d 条记录").replace("%d", String(filtered.length));
+
+    const summary = `<div class="ledger-search-summary">
+      <span>${countLabel}</span>
+      ${totalExpense > 0 ? `<span class="ledger-expense">${this.i18n.expense ?? "支出"}: ${formatAmount(totalExpense)}</span>` : ""}
+      ${totalIncome > 0 ? `<span class="ledger-income">${this.i18n.income ?? "收入"}: ${formatAmount(totalIncome)}</span>` : ""}
+    </div>`;
+
+    const list = filtered
+      .map((t) => {
+        const cat = data.categories.find((c) => c.id === t.categoryId);
+        const sign = t.type === "income" ? "+" : "-";
+        return `<div class="ledger-tx-item">
+          <span class="ledger-tx-icon">${cat?.icon ?? "•"}</span>
+          <span class="ledger-tx-info">
+            <span class="ledger-tx-name">${cat?.name ?? "-"}${t.note ? " · " + t.note : ""}</span>
+            <span class="ledger-tx-date">${t.date}</span>
+          </span>
+          <span class="ledger-tx-amount ${t.type}">${sign}${formatAmount(t.amount)}</span>
+          <span class="ledger-tx-actions">
+            ${t.blockId ? `<button class="ledger-tx-btn" data-action="goto-block" data-block-id="${t.blockId}" title="${this.i18n.linkedBlock ?? "已关联"}">🔗</button>` : ""}
+            <button class="ledger-tx-btn" data-action="edit" data-id="${t.id}" title="${this.i18n.editBtn ?? "编辑"}">✏️</button>
+            <button class="ledger-tx-btn" data-action="delete" data-id="${t.id}" title="${this.i18n.deleteBtn ?? "删除"}">🗑️</button>
+          </span>
+        </div>`;
+      })
+      .join("");
+
+    return summary + list;
   }
 
   // ---- 统计图表 ----

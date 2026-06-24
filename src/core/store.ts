@@ -95,13 +95,16 @@ export class LedgerStore {
     await this.save(data);
   }
 
-  /** 兼容旧数据 / 补全字段 */
+  /** 兼容旧数据 / 补全字段 / 自动合入新增的默认分类 */
   private normalize(data: Partial<LedgerData>): LedgerData {
     const base = emptyData();
+    const existingCats = data.categories?.length ? data.categories : base.categories;
+    const existingIds = new Set(existingCats.map((c) => c.id));
+    const missingCats = base.categories.filter((c) => !existingIds.has(c.id));
     return {
       version: data.version ?? base.version,
       transactions: data.transactions ?? [],
-      categories: data.categories?.length ? data.categories : base.categories,
+      categories: [...existingCats, ...missingCats],
       accounts: data.accounts?.length ? data.accounts : base.accounts,
     };
   }

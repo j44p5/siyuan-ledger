@@ -4,9 +4,10 @@
 // 我们把根 DOM 挂到 model.element 上即可。
 // QuickEntry 在 init() 数据就绪后才创建，避免 data 为 undefined 时崩溃。
 
+import {openTab} from "siyuan";
 import type {LedgerData} from "../core/types";
 import type {LedgerStore} from "../core/store";
-import {formatAmount, summarize, inMonth} from "../core/stats";
+import {formatAmount, summarize, inMonth, inYear} from "../core/stats";
 import {QuickEntry} from "./QuickEntry";
 
 export class DockPanel {
@@ -15,12 +16,27 @@ export class DockPanel {
   private root: HTMLElement;
   private entry: QuickEntry | null = null;
   private i18n: Record<string, string>;
+  private app: any;
 
-  constructor(store: LedgerStore, mountTarget: HTMLElement, i18n: Record<string, string>) {
+  constructor(store: LedgerStore, mountTarget: HTMLElement, i18n: Record<string, string>, app: any) {
     this.store = store;
     this.i18n = i18n;
+    this.app = app;
     this.root = this.buildShell();
     mountTarget.appendChild(this.root);
+
+    // 事件委托：点击关联笔记按钮
+    this.root.addEventListener("click", (e) => {
+      const target = e.target as HTMLElement;
+      const gotoBtn = target.closest("[data-action='goto-block']") as HTMLElement | null;
+      if (gotoBtn) {
+        e.stopPropagation();
+        const blockId = gotoBtn.dataset.blockId;
+        if (blockId) {
+          openTab({app: this.app, doc: {id: blockId}});
+        }
+      }
+    });
   }
 
   /** 首次渲染前必须先 await 装载数据 */
@@ -69,24 +85,43 @@ export class DockPanel {
   private renderSummary(): void {
     if (!this.data) return;
     const ym = new Date().toISOString().slice(0, 7);
+    const year = new Date().toISOString().slice(0, 4);
     const monthTx = this.data.transactions.filter((t) => inMonth(t, ym));
-    const s = summarize(monthTx);
+    const yearTx = this.data.transactions.filter((t) => inYear(t, year));
+    const ms = summarize(monthTx);
+    const ys = summarize(yearTx);
     const box = this.root.querySelector(".ledger-dock-summary") as HTMLElement;
     box.innerHTML = `
-      <div class="ledger-summary-row">
-        <span>${this.i18n.monthExpense ?? "本月支出"}</span><b class="ledger-expense">${formatAmount(s.expense)}</b>
+      <div class="ledger-summary-section">
+        <div class="ledger-summary-title">${this.i18n.monthSummary ?? "本月"}</div>
+        <div class="ledger-summary-row">
+          <span>${this.i18n.monthExpense ?? "本月支出"}</span><b class="ledger-expense">${formatAmount(ms.expense)}</b>
+        </div>
+        <div class="ledger-summary-row">
+          <span>${this.i18n.monthIncome ?? "本月收入"}</span><b class="ledger-income">${formatAmount(ms.income)}</b>
+        </div>
+        <div class="ledger-summary-row">
+          <span>${this.i18n.balance ?? "结余"}</span><b class="ledger-balance">${formatAmount(ms.balance)}</b>
+        </div>
       </div>
-      <div class="ledger-summary-row">
-        <span>${this.i18n.monthIncome ?? "本月收入"}</span><b class="ledger-income">${formatAmount(s.income)}</b>
-      </div>
-      <div class="ledger-summary-row">
-        <span>${this.i18n.balance ?? "结余"}</span><b class="ledger-balance">${formatAmount(s.balance)}</b>
+      <div class="ledger-summary-divider"></div>
+      <div class="ledger-summary-section">
+        <div class="ledger-summary-title">${this.i18n.yearSummary ?? "本年"}</div>
+        <div class="ledger-summary-row">
+          <span>${this.i18n.yearExpense ?? "本年支出"}</span><b class="ledger-expense">${formatAmount(ys.expense)}</b>
+        </div>
+        <div class="ledger-summary-row">
+          <span>${this.i18n.yearIncome ?? "本年收入"}</span><b class="ledger-income">${formatAmount(ys.income)}</b>
+        </div>
+        <div class="ledger-summary-row">
+          <span>${this.i18n.yearBalance ?? "本年结余"}</span><b class="ledger-balance">${formatAmount(ys.balance)}</b>
+        </div>
       </div>
     `;
 
     // 最近 20 笔
     const recent = [...this.data.transactions]
-      .sort((a, b) => b.createdAt - a.createdAt)
+      .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt)
       .slice(0, 20);
     const recentBox = this.root.querySelector(".ledger-dock-recent") as HTMLElement;
     const list = recent.length
@@ -101,6 +136,7 @@ export class DockPanel {
                 <span class="ledger-tx-date">${t.date}</span>
               </span>
               <span class="ledger-tx-amount ${t.type}">${sign}${formatAmount(t.amount)}</span>
+              ${t.blockId ? `<button class="ledger-tx-btn" data-action="goto-block" data-block-id="${t.blockId}" title="${this.i18n.linkedBlock ?? "已关联"}">🔗</button>` : ""}
             </div>`;
           })
           .join("")

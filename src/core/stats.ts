@@ -25,6 +25,25 @@ export function inMonth(tx: Transaction, yearMonth: string): boolean {
   return tx.date.startsWith(yearMonth);
 }
 
+/** 筛选某年的交易（date 形如 2024） */
+export function inYear(tx: Transaction, year: string): boolean {
+  return tx.date.startsWith(year);
+}
+
+/** 按日期范围筛选（含两端），from/to 为 yyyy-mm-dd */
+export function inDateRange(tx: Transaction, from: string, to: string): boolean {
+  if (from && tx.date < from) return false;
+  if (to && tx.date > to) return false;
+  return true;
+}
+
+/** 按金额范围筛选（单位分），min/max 为 0 表示不限 */
+export function inAmountRange(tx: Transaction, min: number, max: number): boolean {
+  if (min > 0 && tx.amount < min) return false;
+  if (max > 0 && tx.amount > max) return false;
+  return true;
+}
+
 /** 计算一组交易的收支汇总 */
 export function summarize(transactions: Transaction[]): PeriodSummary {
   let income = 0;

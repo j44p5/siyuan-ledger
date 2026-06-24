@@ -2,7 +2,7 @@
   "name": "siyuan-ledger",
   "author": "howke",
   "url": "https://github.com/j44p5/siyuan-ledger",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "minAppVersion": "2.9.0",
   "backends": ["all"],
   "frontends": ["all"],

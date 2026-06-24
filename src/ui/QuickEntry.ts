@@ -113,7 +113,13 @@ export class QuickEntry {
 
   private fillCategories(): void {
     const box = this.el.querySelector(".ledger-categories") as HTMLElement;
-    const cats = this.data.categories.filter((c) => c.type === this.currentType);
+    const cats = this.data.categories
+      .filter((c) => c.type === this.currentType)
+      .sort((a, b) => {
+        const aOther = a.id.startsWith("cat_other") ? 1 : 0;
+        const bOther = b.id.startsWith("cat_other") ? 1 : 0;
+        return aOther - bOther;
+      });
     box.innerHTML = "";
     this.selectedCategoryId = cats[0]?.id ?? "";
     for (const c of cats) {

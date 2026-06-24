@@ -76,6 +76,8 @@ export function defaultCategories(): Category[] {
     {id: "cat_shopping", name: "购物", icon: "🛍️", type: "expense"},
     {id: "cat_housing", name: "居家", icon: "🏠", type: "expense"},
     {id: "cat_fun", name: "娱乐", icon: "🎮", type: "expense"},
+    {id: "cat_child", name: "育儿", icon: "👶", type: "expense"},
+    {id: "cat_social", name: "社交", icon: "🤝", type: "expense"},
     {id: "cat_other_exp", name: "其他", icon: "📝", type: "expense"},
     {id: "cat_salary", name: "工资", icon: "💰", type: "income"},
     {id: "cat_bonus", name: "奖金", icon: "🎁", type: "income"},

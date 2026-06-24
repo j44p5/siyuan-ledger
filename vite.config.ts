@@ -14,6 +14,8 @@ function copyStaticAssets(): Plugin {
     ["static", "."], // static/index.css -> dist/index.css
     ["i18n", "."],
     ["README.md", "."],
+    ["icon.png", "."],
+    ["preview.png", "."],
   ];
   return {
     name: "copy-static-assets",
