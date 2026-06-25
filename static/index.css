@@ -429,3 +429,21 @@
 .ledger-search-summary .ledger-income {
   font-weight: 600;
 }
+.ledger-search-io {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+}
+.ledger-io-btn {
+  flex: 1;
+  padding: 6px;
+  border: 1px solid var(--b3-theme-on-surface-light);
+  border-radius: 4px;
+  background: var(--b3-theme-background);
+  color: var(--b3-theme-on-surface);
+  font-size: 13px;
+  cursor: pointer;
+}
+.ledger-io-btn:hover {
+  background: var(--b3-theme-background-light);
+}

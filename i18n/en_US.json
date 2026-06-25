@@ -47,5 +47,12 @@
   "searchBtn": "Search",
   "searchResultCount": "%d records found",
   "searchAllTypes": "All",
-  "searchAllCategories": "All Categories"
+  "searchAllCategories": "All Categories",
+  "exportCsv": "Export CSV",
+  "importCsv": "Import CSV",
+  "importConfirm": "Import %d records?",
+  "importSuccess": "Successfully imported %d records",
+  "importSkipDup": "Skipped %d duplicates",
+  "importError": "CSV parse failed, please check format",
+  "exportEmpty": "No data to export"
 }

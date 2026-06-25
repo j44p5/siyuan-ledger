@@ -243,6 +243,7 @@ export default class LedgerPlugin extends Plugin {
     // 当前编辑状态
     let editingId: string | null = null;
     let currentType: TxType = "expense";
+    let lastFiltered: Transaction[] = [];
 
     const body = dialog.element.querySelector(".b3-dialog__body") ?? dialog.element;
 
@@ -437,11 +438,45 @@ export default class LedgerPlugin extends Plugin {
 
           filtered.sort((a, b) => b.date.localeCompare(a.date) || b.createdAt - a.createdAt);
 
+          lastFiltered = filtered;
+
           const resultBox = body.querySelector(".ledger-search-results") as HTMLElement;
           if (resultBox) {
             resultBox.innerHTML = this.buildSearchResultsHtml(filtered, fresh);
           }
         })();
+        return;
+      }
+
+      // 导出 CSV
+      if (target.closest("[data-action='export-csv']")) {
+        if (!lastFiltered.length) {
+          showMessage(i18n.exportEmpty ?? "无数据可导出", 4000, "info");
+          return;
+        }
+        void (async () => {
+          const fresh = await store.load();
+          const csv = this.buildCsvString(lastFiltered, fresh);
+          const bom = "\uFEFF";
+          const blob = new Blob([bom + csv], {type: "text/csv;charset=utf-8"});
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement("a");
+          const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+          a.href = url;
+          a.download = `ledger_${dateStr}.csv`;
+          a.click();
+          URL.revokeObjectURL(url);
+        })();
+        return;
+      }
+
+      // 导入 CSV — 触发隐藏文件选择
+      if (target.closest("[data-action='import-csv']")) {
+        const fileInput = body.querySelector(".ledger-import-file") as HTMLInputElement | null;
+        if (fileInput) {
+          fileInput.value = "";
+          fileInput.click();
+        }
         return;
       }
     });
@@ -458,6 +493,96 @@ export default class LedgerPlugin extends Plugin {
             catSelect.innerHTML = this.buildSearchCategoryOptions(fresh, typeVal);
           })();
         }
+      }
+
+      // CSV 文件选择后导入
+      if (target.classList.contains("ledger-import-file")) {
+        const input = target as HTMLInputElement;
+        const file = input.files?.[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = () => {
+          void (async () => {
+            try {
+              const text = reader.result as string;
+              const rows = this.parseCsv(text);
+              if (!rows.length) {
+                showMessage(i18n.importError ?? "CSV 解析失败，请检查格式", 4000, "error");
+                return;
+              }
+
+              const fresh = await store.load();
+
+              // 去重：按 date+type+amount(分)+note 组合键
+              const existKeys = new Set(
+                fresh.transactions.map((t) => `${t.date}|${t.type}|${t.amount}|${t.note ?? ""}`)
+              );
+
+              let imported = 0;
+              let skipped = 0;
+
+              for (const row of rows) {
+                const date = row.date;
+                const typeVal = row.type === (i18n.income ?? "收入") ? "income" : "expense";
+                const amountCents = Math.round(parseFloat(row.amount) * 100);
+                if (!date || isNaN(amountCents) || amountCents <= 0) {
+                  skipped++;
+                  continue;
+                }
+
+                const dedupKey = `${date}|${typeVal}|${amountCents}|${row.note ?? ""}`;
+                if (existKeys.has(dedupKey)) {
+                  skipped++;
+                  continue;
+                }
+
+                // 分类匹配：按名称查找，未找到则自动创建
+                let cat = fresh.categories.find((c) => c.name === row.category && c.type === typeVal);
+                if (!cat) {
+                  cat = {
+                    id: "cat_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+                    name: row.category || (typeVal === "income" ? (i18n.income ?? "收入") : (i18n.expense ?? "支出")),
+                    icon: typeVal === "income" ? "💰" : "📝",
+                    type: typeVal as TxType,
+                  };
+                  fresh.categories.push(cat);
+                }
+
+                // 账户匹配：按名称查找，未找到使用默认
+                const acc = fresh.accounts.find((a) => a.name === row.account) ?? fresh.accounts[0];
+
+                await store.addTransaction({
+                  type: typeVal as TxType,
+                  amount: amountCents,
+                  currency: "CNY",
+                  categoryId: cat.id,
+                  accountId: acc.id,
+                  date,
+                  note: row.note || undefined,
+                });
+
+                existKeys.add(dedupKey);
+                imported++;
+              }
+
+              // 保存分类变更（如果有新增分类）
+              await store.save(fresh);
+
+              let msg = (i18n.importSuccess ?? "成功导入 %d 条记录").replace("%d", String(imported));
+              if (skipped > 0) {
+                msg += "，" + (i18n.importSkipDup ?? "跳过 %d 条重复记录").replace("%d", String(skipped));
+              }
+              showMessage(msg, 4000, imported > 0 ? "info" : "error");
+
+              // 刷新对话框和 dock
+              await refreshAll();
+              if (this.dockPanel) void this.dockPanel.refresh();
+            } catch {
+              showMessage(i18n.importError ?? "CSV 解析失败，请检查格式", 4000, "error");
+            }
+          })();
+        };
+        reader.readAsText(file, "UTF-8");
       }
     });
   }
@@ -584,6 +709,11 @@ export default class LedgerPlugin extends Plugin {
         <input class="ledger-search-max ledger-field" type="number" step="0.01" min="0" placeholder="0.00" />
       </div>
       <button class="ledger-search-btn" data-action="search">${this.i18n.searchBtn ?? "查询"}</button>
+      <div class="ledger-search-io">
+        <button class="ledger-io-btn" data-action="export-csv">📥 ${this.i18n.exportCsv ?? "导出 CSV"}</button>
+        <button class="ledger-io-btn" data-action="import-csv">📤 ${this.i18n.importCsv ?? "导入 CSV"}</button>
+        <input type="file" accept=".csv" class="ledger-import-file" style="display:none" />
+      </div>
     </div>
     <div class="ledger-search-results"></div>`;
   }
@@ -635,6 +765,79 @@ export default class LedgerPlugin extends Plugin {
       .join("");
 
     return summary + list;
+  }
+
+  // ---- CSV 工具 ----
+
+  /** 将交易列表导出为 CSV 字符串（不含 BOM，调用方自行添加） */
+  private buildCsvString(transactions: Transaction[], data: LedgerData): string {
+    const header = "日期,类型,分类,金额,账户,备注";
+    const rows = transactions.map((t) => {
+      const cat = data.categories.find((c) => c.id === t.categoryId);
+      const acc = data.accounts.find((a) => a.id === t.accountId);
+      const typeLabel = t.type === "income" ? (this.i18n.income ?? "收入") : (this.i18n.expense ?? "支出");
+      const amount = (t.amount / 100).toFixed(2);
+      const note = (t.note ?? "").replace(/"/g, '""');
+      const catName = cat?.name ?? "";
+      const accName = acc?.name ?? "";
+      return `${t.date},${typeLabel},${catName},${amount},${accName},"${note}"`;
+    });
+    return header + "\n" + rows.join("\n");
+  }
+
+  /** 简单 CSV 解析，支持引号包裹字段 */
+  private parseCsv(text: string): Array<{date: string; type: string; category: string; amount: string; account: string; note: string}> {
+    // 去除 BOM
+    const clean = text.replace(/^\uFEFF/, "");
+    const lines = clean.split(/\r?\n/).filter((l) => l.trim());
+    if (lines.length < 2) return [];
+
+    // 跳过表头
+    const results: Array<{date: string; type: string; category: string; amount: string; account: string; note: string}> = [];
+    for (let i = 1; i < lines.length; i++) {
+      const fields = this.splitCsvLine(lines[i]);
+      if (fields.length < 4) continue;
+      results.push({
+        date: fields[0]?.trim() ?? "",
+        type: fields[1]?.trim() ?? "",
+        category: fields[2]?.trim() ?? "",
+        amount: fields[3]?.trim() ?? "",
+        account: fields[4]?.trim() ?? "",
+        note: fields[5]?.trim() ?? "",
+      });
+    }
+    return results;
+  }
+
+  /** 拆分 CSV 单行，正确处理引号内的逗号 */
+  private splitCsvLine(line: string): string[] {
+    const fields: string[] = [];
+    let current = "";
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (inQuotes) {
+        if (ch === '"' && line[i + 1] === '"') {
+          current += '"';
+          i++;
+        } else if (ch === '"') {
+          inQuotes = false;
+        } else {
+          current += ch;
+        }
+      } else {
+        if (ch === '"') {
+          inQuotes = true;
+        } else if (ch === ",") {
+          fields.push(current);
+          current = "";
+        } else {
+          current += ch;
+        }
+      }
+    }
+    fields.push(current);
+    return fields;
   }
 
   // ---- 统计图表 ----

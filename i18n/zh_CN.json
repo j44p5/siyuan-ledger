@@ -47,5 +47,12 @@
   "searchBtn": "查询",
   "searchResultCount": "共 %d 条记录",
   "searchAllTypes": "全部",
-  "searchAllCategories": "全部分类"
+  "searchAllCategories": "全部分类",
+  "exportCsv": "导出 CSV",
+  "importCsv": "导入 CSV",
+  "importConfirm": "确认导入 %d 条记录？",
+  "importSuccess": "成功导入 %d 条记录",
+  "importSkipDup": "跳过 %d 条重复记录",
+  "importError": "CSV 解析失败，请检查格式",
+  "exportEmpty": "无数据可导出"
 }
